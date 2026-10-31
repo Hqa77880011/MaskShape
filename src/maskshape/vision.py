@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 
 
 def classification_metrics(logits, labels):
@@ -12,6 +12,8 @@ def classification_metrics(logits, labels):
     prediction = probability.argmax(-1)
     confidence = probability.max(-1)
     correct = prediction == labels
+    classes = np.arange(probability.shape[1])
+    confusion = confusion_matrix(labels, prediction, labels=classes)
     ece = 0.0
     for lower in np.linspace(0, 1, 16)[:-1]:
         mask = (confidence > lower) & (confidence <= lower + 1 / 15)
@@ -19,8 +21,8 @@ def classification_metrics(logits, labels):
             ece += mask.mean() * abs(correct[mask].mean() - confidence[mask].mean())
     return {
         "accuracy": float(accuracy_score(labels, prediction)),
-        "balanced_accuracy": float(balanced_accuracy_score(labels, prediction)),
-        "macro_f1": float(f1_score(labels, prediction, average="macro", zero_division=0)),
+        "balanced_accuracy": float(np.mean(np.diag(confusion) / np.maximum(confusion.sum(1), 1))),
+        "macro_f1": float(f1_score(labels, prediction, labels=classes, average="macro", zero_division=0)),
         "top3": float(
             np.mean([y in row for y, row in zip(labels, np.argsort(-probability, axis=-1)[:, :3])])
         ),

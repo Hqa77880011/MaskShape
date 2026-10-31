@@ -39,11 +39,13 @@ def to_device(batch, device):
     return {k: v.to(device) for k, v in batch.items()}
 
 
-def prepare(source, output, seed):
+def prepare(source, output, seed, heldout_backgrounds=None):
     with np.load(source, allow_pickle=False) as file:
         values = {k: np.asarray(file[k]) for k in file.files}
     n = len(values["x"])
-    groups = values.get("group", np.arange(n))
+    if "group" not in values:
+        raise ValueError("Declare source-defect group IDs before splitting augmented samples")
+    groups = values["group"]
     if "split" in values:
         split = values["split"]
         for group in np.unique(groups):
@@ -58,6 +60,11 @@ def prepare(source, output, seed):
         split = np.full(n, 2)
         split[np.isin(groups, unique[:cut1])] = 0
         split[np.isin(groups, unique[cut1:cut2])] = 1
+    if heldout_backgrounds:
+        if "background" not in values:
+            raise ValueError("Held-out background checking requires background IDs")
+        if np.any(np.isin(values["background"], heldout_backgrounds) & (split != 2)):
+            raise ValueError("A declared held-out background occurs outside the test split; supply a grouped split manifest")
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     for index, name in enumerate(("train", "validation", "test")):
@@ -314,6 +321,7 @@ def main():
     item.add_argument("--source", required=True)
     item.add_argument("--output", required=True)
     item.add_argument("--seed", type=int, default=17)
+    item.add_argument("--heldout-backgrounds", nargs="+", type=int)
     for name in ("train", "suite"):
         item = sub.add_parser(name)
         item.add_argument("--config", required=True)
@@ -334,7 +342,7 @@ def main():
     item.add_argument("--output", required=True)
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.source, args.output, args.seed)
+        prepare(args.source, args.output, args.seed, args.heldout_backgrounds)
     elif args.command in ("train", "suite"):
         cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
         for method in args.methods:
