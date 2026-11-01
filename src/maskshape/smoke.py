@@ -1,4 +1,4 @@
-"""Generated-sample CPU training/inference checks, not paper performance."""
+"""CPU training and inference checks with generated samples."""
 
 import argparse
 import json
